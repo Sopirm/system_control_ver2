@@ -151,7 +151,7 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 		if requestID == "" {
 			requestID = generateRequestID() // Генерируем новый ID, если отсутствует
 			// Опционально: добавить сгенерированный ID в заголовок ответа
-			w.Header.Set("X-Request-ID", requestID)
+			w.Header().Set("X-Request-ID", requestID)
 		}
 		// Прокидываем X-Request-ID во все исходящие запросы к микросервисам
 		r.Header.Set("X-Request-ID", requestID)
@@ -175,7 +175,7 @@ func respondWithError(w http.ResponseWriter, code int, message string) {
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
 
-	w.Header.Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(response)
 }
