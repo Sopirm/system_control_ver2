@@ -12,13 +12,13 @@
 
 ### Бэкенд (Golang)
 *   **Язык:** Go (Golang)
-*   **Веб-фреймворк:** Echo / Gin
-*   **ORM/Драйвер БД:** GORM / `database/sql` + `pgx`
-*   **Аутентификация/Авторизация (JWT):** `github.com/golang-jwt/jwt`
-*   **Валидация данных:** `github.com/go-playground/validator`
-*   **Логирование:** Zap / Logrus
-*   **Трассировка:** OpenTelemetry Go SDK
-*   **Ограничение частоты запросов:** Встроенные решения Echo/Gin или `golang.org/x/time/rate`
+*   **Веб-фреймворк:** `net/http` (стандартная библиотека) с `github.com/gorilla/mux` для маршрутизации
+*   **ORM/Драйвер БД:** GORM / `database/sql` + `pgx` (будет реализовано позже)
+*   **Аутентификация/Авторизация (JWT):** `github.com/golang-jwt/jwt/v5`
+*   **Валидация данных:** `github.com/go-playground/validator` (будет реализовано позже)
+*   **Логирование:** Zap / Logrus (будет реализовано позже)
+*   **Трассировка:** OpenTelemetry Go SDK (будет реализовано позже)
+*   **Ограничение частоты запросов:** `golang.org/x/time/rate`
 *   **Обработка CORS:** `github.com/rs/cors`
 
 ### Фронтенд (Vue.js)
@@ -37,9 +37,9 @@
 ├── api_gateway/           # Go проект для API Gateway
 ├── service_users/         # Go проект для сервиса пользователей
 ├── service_orders/        # Go проект для сервиса заказов
-├── docs/                  # Для спецификаций OpenAPI
+├── docs/                  # Для спецификаций OpenAPI (будет создана позже)
 ├── frontend/              # Vue 3 проект
-├── docker-compose.yml     # Файл для оркестрации Docker-контейнеров (будет создан позже)
+├── docker-compose.yml     # Файл для оркестрации Docker-контейнеров
 ├── README.md              # Этот файл
 ```
 
@@ -63,8 +63,8 @@
     docker-compose up --build
     ```
 4.  **Доступ к приложению:**
+    *   API Gateway будет доступен по адресу: `http://localhost:8080`
     *   Фронтенд будет доступен по адресу: `http://localhost:8080` (или другому порту, указанному в `docker-compose.yml`)
-    *   API Gateway будет доступен по адресу: `http://localhost:8000` (или другому порту)
 
 ## Разработка
 
