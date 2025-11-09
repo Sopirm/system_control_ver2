@@ -4,7 +4,7 @@
 
 ```bash
 # Клонирование и переход в проект
-git clone <repository_url>
+git clone https://github.com/Sopirm/system_control_ver2
 cd system_control_ver2
 
 # Быстрый запуск всей системы
@@ -15,6 +15,8 @@ docker-compose up -d
 docker-compose ps
 curl http://localhost:8080/health
 ```
+
+> **💡 Совет для лучшей производительности:** Установите переменную окружения `COMPOSE_BAKE=true` для ускорения сборки образов.
 
 **Доступные сервисы:**
 - API Gateway: http://localhost:8080

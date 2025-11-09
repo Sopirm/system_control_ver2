@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Production environment docker-compose
 # Use with: docker-compose -f docker-compose.production.yml up -d
 
