@@ -38,16 +38,16 @@ func Load() (*Config, error) {
 
 	// Конфигурация БД
 	config.DB.Host = getEnv("DB_HOST", "localhost")
-	
+
 	port, err := strconv.Atoi(getEnv("DB_PORT", "5432"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid DB_PORT: %v", err)
 	}
 	config.DB.Port = port
-	
+
 	config.DB.Name = getEnv("DB_NAME", "system_control")
 	config.DB.User = getEnv("DB_USER", "postgres")
-	config.DB.Password = getEnv("DB_PASSWORD", "postgres")
+	config.DB.Password = getEnv("DB_PASSWORD", "1234")
 
 	// Конфигурация сервера
 	config.Server.Port = getEnv("SERVER_PORT", "8081")
