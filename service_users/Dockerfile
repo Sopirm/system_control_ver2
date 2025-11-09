@@ -8,6 +8,7 @@ RUN go mod download
 
 COPY . .
 
+RUN go mod tidy
 RUN go build -o /service_users main.go
 
 EXPOSE 8081

@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -77,20 +76,20 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Создаем wrapper для захвата статус кода
 		wrapper := &responseWrapper{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		start := time.Now()
 		next.ServeHTTP(wrapper, r)
 		duration := time.Since(start)
 
 		// Используем структурированный логгер
 		logger.LogHTTPRequest(r, wrapper.statusCode, r.Method, r.URL.Path, "service_users")
-		
+
 		// Дополнительные метрики
 		zapLogger := logger.GetLogger()
 		if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
 			zapLogger = logger.WithRequestID(zapLogger, requestID)
 		}
-		
+
 		zapLogger.Info("Request completed",
 			zap.Duration("duration", duration),
 			zap.Int64("content_length", r.ContentLength),

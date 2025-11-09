@@ -64,8 +64,8 @@ func main() {
 	}
 	defer logger.Sync()
 
-	log := logger.GetLogger()
-	log.Info("Запуск API Gateway", zap.String("environment", env))
+	zapLogger := logger.GetLogger()
+	zapLogger.Info("Запуск API Gateway", zap.String("environment", env))
 
 	router := mux.NewRouter()
 
@@ -103,8 +103,11 @@ func main() {
 
 	handledRouter := c.Handler(router)
 
-	log.Info("API Gateway запущен на порту :8080")
-	log.Fatal(http.ListenAndServe(":8080", handledRouter))
+	zapLogger.Info("API Gateway запущен на порту :8080")
+
+	if err := http.ListenAndServe(":8080", handledRouter); err != nil {
+		zapLogger.Fatal("Ошибка запуска HTTP сервера", zap.Error(err))
+	}
 }
 
 // proxyToUsersService проксирует запросы к service_users
