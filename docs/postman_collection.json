@@ -1,0 +1,624 @@
+{
+  "info": {
+    "name": "Система Управления Задачами - API Collection",
+    "description": "Коллекция для тестирования всех endpoints системы управления задачами",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "👥 Users",
+      "item": [
+        {
+          "name": "Регистрация пользователя",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has success field', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('success', true);",
+                  "});",
+                  "",
+                  "pm.test('Response contains user data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('id');",
+                  "    pm.expect(response.data).to.have.property('email');",
+                  "    pm.expect(response.data).to.have.property('name');",
+                  "    pm.expect(response.data).to.have.property('roles');",
+                  "    ",
+                  "    // Сохраняем ID пользователя для дальнейших тестов",
+                  "    pm.collectionVariables.set('userId', response.data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}",
+                "description": "Request tracing ID"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"Тестовый Пользователь\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "register"]
+            }
+          }
+        },
+        {
+          "name": "Аутентификация",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains token', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('token');",
+                  "    pm.expect(response.data).to.have.property('user');",
+                  "    ",
+                  "    // Сохраняем токен для дальнейших запросов",
+                  "    pm.collectionVariables.set('authToken', response.data.token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "login"]
+            }
+          }
+        },
+        {
+          "name": "Получить профиль",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Profile data is valid', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('id');",
+                  "    pm.expect(response.data).to.have.property('email', 'test@example.com');",
+                  "    pm.expect(response.data).to.have.property('name');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Обновить профиль",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Profile updated', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('name', 'Обновленное Имя');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Обновленное Имя\",\n  \"email\": \"test@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Список пользователей (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Этот тест может провалиться если пользователь не admin",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Users list retrieved', function () {",
+                  "        const response = pm.response.json();",
+                  "        pm.expect(response.data).to.have.property('users');",
+                  "        pm.expect(response.data).to.have.property('total');",
+                  "    });",
+                  "} else if (pm.response.code === 403) {",
+                  "    pm.test('Access denied for non-admin', function () {",
+                  "        pm.expect(pm.response.code).to.equal(403);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users?limit=10&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📦 Orders",
+      "item": [
+        {
+          "name": "Создать заказ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Order created successfully', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('id');",
+                  "    pm.expect(response.data).to.have.property('status', 'создан');",
+                  "    pm.expect(response.data).to.have.property('total_sum', 2100);",
+                  "    ",
+                  "    // Сохраняем ID заказа для дальнейших тестов",
+                  "    pm.collectionVariables.set('orderId', response.data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"product\": \"Установка окон\",\n      \"quantity\": 3,\n      \"price\": 500.00\n    },\n    {\n      \"product\": \"Монтаж дверей\",\n      \"quantity\": 2,\n      \"price\": 300.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "orders"]
+            }
+          }
+        },
+        {
+          "name": "Получить список заказов",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Orders list format is correct', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('orders');",
+                  "    pm.expect(response.data).to.have.property('total');",
+                  "    pm.expect(response.data).to.have.property('limit');",
+                  "    pm.expect(response.data).to.have.property('offset');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/orders?limit=10&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "orders"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Получить заказ по ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Order details are correct', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('id', pm.collectionVariables.get('orderId'));",
+                  "    pm.expect(response.data).to.have.property('items');",
+                  "    pm.expect(response.data.items).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "orders", "{{orderId}}"]
+            }
+          }
+        },
+        {
+          "name": "Обновить статус заказа",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Order status updated', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('status', 'в работе');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"в работе\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/orders/{{orderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "orders", "{{orderId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Отменить заказ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Order cancelled', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('status', 'отменён');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/orders/{{orderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "orders", "{{orderId}}", "cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Events & System",
+      "item": [
+        {
+          "name": "Статистика событий",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Events statistics format is correct', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('statistics');",
+                  "    pm.expect(response.data).to.have.property('service');",
+                  "    pm.expect(response.data).to.have.property('timestamp');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/events/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "events", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Health check format is correct', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('status');",
+                  "    pm.expect(response).to.have.property('services');",
+                  "    pm.expect(response).to.have.property('timestamp');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-ID",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Автоматически устанавливаем X-Request-ID если он не задан",
+          "if (!pm.request.headers.has('X-Request-ID')) {",
+          "    pm.request.headers.add({",
+          "        key: 'X-Request-ID',",
+          "        value: pm.variables.replaceIn('{{$guid}}')  ",
+          "    });",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Глобальные тесты для всех запросов",
+          "pm.test('Response time is less than 5000ms', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});",
+          "",
+          "pm.test('Response has Content-Type header', function () {",
+          "    pm.expect(pm.response.headers.has('Content-Type')).to.be.true;",
+          "});",
+          "",
+          "// Проверяем структуру ответа для успешных запросов",
+          "if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "    try {",
+          "        const response = pm.response.json();",
+          "        if (response.hasOwnProperty('success')) {",
+          "            pm.test('Response has proper success format', function () {",
+          "                pm.expect(response).to.have.property('success');",
+          "                if (response.success) {",
+          "                    pm.expect(response).to.have.property('data');",
+          "                } else {",
+          "                    pm.expect(response).to.have.property('error');",
+          "                }",
+          "            });",
+          "        }",
+          "    } catch (e) {",
+          "        // Игнорируем ошибки парсинга JSON для некоторых endpoints",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ]
+}
