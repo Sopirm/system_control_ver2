@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"service_users/config"
+	"service_users/logger"
 	"service_users/models"
 	"service_users/repository"
 	"service_users/utils"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"go.uber.org/zap"
 )
 
 // UserHandler обработчик для пользователей
@@ -75,9 +77,13 @@ func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.userRepo.Create(user); err != nil {
+		logger.LogAuthEvent(r, "registration", req.Email, false, err.Error())
 		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка создания пользователя")
 		return
 	}
+
+	// Логируем успешную регистрацию
+	logger.LogAuthEvent(r, "registration", req.Email, true, "")
 
 	// Очищаем пароль перед отправкой
 	user.Password = ""
@@ -101,12 +107,14 @@ func (h *UserHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	// Поиск пользователя по email
 	user, err := h.userRepo.GetByEmail(req.Email)
 	if err != nil {
+		logger.LogAuthEvent(r, "login", req.Email, false, "User not found")
 		h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Неверный email или пароль")
 		return
 	}
 
 	// Проверка пароля
 	if !utils.CheckPassword(req.Password, user.Password) {
+		logger.LogAuthEvent(r, "login", req.Email, false, "Invalid password")
 		h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Неверный email или пароль")
 		return
 	}
@@ -114,9 +122,13 @@ func (h *UserHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	// Генерация JWT токена
 	token, err := utils.GenerateJWT(user, h.config.JWT.Secret)
 	if err != nil {
+		logger.LogAuthEvent(r, "login", req.Email, false, "Token generation failed")
 		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка генерации токена")
 		return
 	}
+
+	// Логируем успешный вход
+	logger.LogAuthEvent(r, "login", req.Email, true, "")
 
 	// Очищаем пароль перед отправкой
 	user.Password = ""
@@ -193,9 +205,13 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 	user.Name = req.Name
 
 	if err := h.userRepo.Update(user); err != nil {
+		logger.LogUserAction(r, "profile_update", fmt.Sprintf("user_id=%s", userID), false)
 		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка обновления профиля")
 		return
 	}
+
+	// Логируем успешное обновление профиля
+	logger.LogUserAction(r, "profile_update", fmt.Sprintf("user_id=%s, email=%s", userID, req.Email), true)
 
 	// Очищаем пароль перед отправкой
 	user.Password = ""
@@ -291,6 +307,24 @@ func (h *UserHandler) sendSuccessResponse(w http.ResponseWriter, statusCode int,
 
 // sendErrorResponse отправляет ответ с ошибкой
 func (h *UserHandler) sendErrorResponse(w http.ResponseWriter, statusCode int, code, message string) {
+	// Логируем ошибки с уровнем ERROR если код >= 500, иначе WARN
+	zapLogger := logger.GetLogger()
+	if statusCode >= 500 {
+		zapLogger.Error("HTTP Error Response",
+			zap.Int("status_code", statusCode),
+			zap.String("error_code", code),
+			zap.String("error_message", message),
+			zap.String("service", "service_users"),
+		)
+	} else {
+		zapLogger.Warn("HTTP Error Response",
+			zap.Int("status_code", statusCode),
+			zap.String("error_code", code),
+			zap.String("error_message", message),
+			zap.String("service", "service_users"),
+		)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	
