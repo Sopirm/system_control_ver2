@@ -1,0 +1,546 @@
+openapi: 3.0.3
+info:
+  title: Service Orders API
+  description: |
+    Микросервис управления заказами системы управления задачами.
+    
+    ## Основные возможности
+    
+    - Создание новых заказов
+    - Просмотр списка заказов с фильтрацией и пагинацией
+    - Получение детальной информации о заказе
+    - Обновление статуса заказов
+    - Отмена заказов
+    - Публикация доменных событий
+    - Статистика событий
+    
+    ## Доменные события
+    
+    Сервис публикует следующие события:
+    - **OrderCreatedEvent** - при создании нового заказа
+    - **OrderStatusUpdatedEvent** - при изменении статуса
+    - **OrderCancelledEvent** - при отмене заказа
+    
+    ## Бизнес-логика
+    
+    - Автоматический расчет общей стоимости заказа
+    - Валидация переходов статусов
+    - Контроль доступа к заказам (владелец + админы)
+    - Аудит всех операций с заказами
+    
+    ## Интеграция
+    
+    - Получает информацию о пользователе из headers (X-User-ID, X-User-Roles)
+    - Может запрашивать данные пользователей из Service Users
+    - Публикует события для внешних обработчиков
+
+  version: 1.0.0
+  contact:
+    name: Service Orders Team
+    email: orders-team@systemcontrol.ru
+
+servers:
+  - url: http://localhost:8082
+    description: Development сервер
+  - url: http://localhost:18082
+    description: Test сервер
+  - url: http://service_orders:8082
+    description: Docker internal сервер
+
+tags:
+  - name: Orders
+    description: Управление заказами
+  - name: Events
+    description: Доменные события и статистика
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Order:
+      type: object
+      required:
+        - id
+        - user_id
+        - items
+        - status
+        - total_sum
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        user_id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        status:
+          type: string
+          enum: ["создан", "в работе", "выполнен", "отменён"]
+          example: "создан"
+        total_sum:
+          type: number
+          format: double
+          minimum: 0
+          example: 1500.50
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrderItem:
+      type: object
+      required:
+        - product
+        - quantity
+        - price
+      properties:
+        product:
+          type: string
+          description: Название товара/услуги
+          example: "Установка окон"
+        quantity:
+          type: integer
+          minimum: 1
+          description: Количество
+          example: 3
+        price:
+          type: number
+          format: double
+          minimum: 0
+          description: Цена за единицу
+          example: 500.00
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          minItems: 1
+          description: Список позиций заказа
+
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: ["создан", "в работе", "выполнен", "отменён"]
+          description: Новый статус заказа
+
+    ListOrdersResponse:
+      type: object
+      required:
+        - orders
+        - total
+        - limit
+        - offset
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        total:
+          type: integer
+          description: Общее количество заказов
+        limit:
+          type: integer
+          description: Лимит записей на страницу
+        offset:
+          type: integer
+          description: Смещение
+
+    EventsStats:
+      type: object
+      properties:
+        statistics:
+          type: object
+          properties:
+            orders_created:
+              type: integer
+              description: Количество созданных заказов
+            status_updates:
+              type: integer
+              description: Количество обновлений статуса
+            orders_cancelled:
+              type: integer
+              description: Количество отмененных заказов
+            events_published:
+              type: integer
+              description: Общее количество событий
+            event_processing_errors:
+              type: integer
+              description: Количество ошибок обработки
+        service:
+          type: string
+          example: "service_orders"
+        timestamp:
+          type: string
+          format: date-time
+        description:
+          type: string
+
+    APIResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          $ref: '#/components/schemas/APIError'
+
+    APIError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+            - NOT_FOUND
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - CONFLICT
+            - INTERNAL_SERVER_ERROR
+        message:
+          type: string
+
+paths:
+  /v1/orders:
+    post:
+      tags:
+        - Orders
+      summary: Создать новый заказ
+      description: |
+        Создает новый заказ для текущего пользователя.
+        
+        Процесс:
+        1. Валидация входных данных
+        2. Расчет общей стоимости
+        3. Сохранение в БД со статусом "создан"
+        4. Публикация события OrderCreatedEvent
+        
+        Требования:
+        - Минимум 1 позиция в заказе
+        - Все цены должны быть положительными
+        - Пользователь должен быть аутентифицирован
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              items:
+                - product: "Установка окон"
+                  quantity: 3
+                  price: 500.00
+                - product: "Монтаж дверей"
+                  quantity: 2
+                  price: 300.00
+      responses:
+        '201':
+          description: Заказ создан
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '500':
+          description: Внутренняя ошибка
+
+    get:
+      tags:
+        - Orders
+      summary: Получить список заказов
+      description: |
+        Возвращает список заказов с поддержкой фильтрации и пагинации.
+        
+        Права доступа:
+        - Обычные пользователи видят только свои заказы
+        - Администраторы видят все заказы
+        
+        Фильтры:
+        - По статусу заказа
+        - По ID пользователя (только для админов)
+      operationId: getOrders
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Количество записей на страницу
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Смещение
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: ["создан", "в работе", "выполнен", "отменён"]
+          description: Фильтр по статусу
+        - name: user_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Фильтр по ID пользователя (только для админов)
+      responses:
+        '200':
+          description: Список заказов
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ListOrdersResponse'
+        '401':
+          description: Не авторизован
+        '500':
+          description: Внутренняя ошибка
+
+  /v1/orders/{orderId}:
+    get:
+      tags:
+        - Orders
+      summary: Получить заказ по ID
+      description: |
+        Возвращает детальную информацию о заказе.
+        
+        Права доступа:
+        - Владелец заказа может просматривать свой заказ
+        - Администраторы могут просматривать любые заказы
+      operationId: getOrderById
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID заказа
+      responses:
+        '200':
+          description: Данные заказа
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '401':
+          description: Не авторизован
+        '403':
+          description: Доступ запрещен (не владелец и не админ)
+        '404':
+          description: Заказ не найден
+        '500':
+          description: Внутренняя ошибка
+
+  /v1/orders/{orderId}/status:
+    put:
+      tags:
+        - Orders
+      summary: Обновить статус заказа
+      description: |
+        Обновляет статус заказа с проверкой допустимых переходов.
+        
+        Допустимые переходы:
+        - создан → в работе, отменён
+        - в работе → выполнен, отменён  
+        - выполнен → (финальный)
+        - отменён → (финальный)
+        
+        После успешного обновления публикуется OrderStatusUpdatedEvent.
+      operationId: updateOrderStatus
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Статус обновлен
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          description: Недопустимый переход статуса
+        '401':
+          description: Не авторизован
+        '403':
+          description: Доступ запрещен
+        '404':
+          description: Заказ не найден
+        '500':
+          description: Внутренняя ошибка
+
+  /v1/orders/{orderId}/cancel:
+    post:
+      tags:
+        - Orders
+      summary: Отменить заказ
+      description: |
+        Отменяет заказ (устанавливает статус "отменён").
+        
+        Ограничения:
+        - Нельзя отменить выполненный заказ
+        - Нельзя отменить уже отмененный заказ
+        
+        После отмены публикуется OrderCancelledEvent.
+      operationId: cancelOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Заказ отменен
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          description: Заказ нельзя отменить
+        '401':
+          description: Не авторизован
+        '403':
+          description: Доступ запрещен
+        '404':
+          description: Заказ не найден
+        '500':
+          description: Внутренняя ошибка
+
+  /v1/events/stats:
+    get:
+      tags:
+        - Events
+      summary: Получить статистику событий
+      description: |
+        Возвращает статистику обработки доменных событий.
+        
+        Метрики включают:
+        - Количество созданных заказов
+        - Количество обновлений статуса
+        - Количество отмененных заказов
+        - Общее количество событий
+        - Количество ошибок обработки
+      operationId: getEventsStats
+      responses:
+        '200':
+          description: Статистика событий
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/EventsStats'
+        '401':
+          description: Не авторизован
+        '500':
+          description: Внутренняя ошибка
+
+  /health:
+    get:
+      tags:
+        - System
+      summary: Проверка состояния сервиса
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Сервис работает нормально
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: ["healthy", "unhealthy"]
+                  service:
+                    type: string
+                    example: "service_orders"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  database:
+                    type: string
+                    enum: ["connected", "disconnected"]
+                  events_publisher:
+                    type: string
+                    enum: ["active", "inactive"]
+        '503':
+          description: Сервис недоступен

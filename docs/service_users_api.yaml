@@ -1,0 +1,431 @@
+openapi: 3.0.3
+info:
+  title: Service Users API
+  description: |
+    Микросервис управления пользователями системы управления задачами.
+    
+    ## Основные возможности
+    
+    - Регистрация новых пользователей
+    - Аутентификация и выдача JWT токенов
+    - Управление профилями пользователей
+    - Получение списка пользователей (для администраторов)
+    - Валидация и хеширование паролей
+    - Контроль доступа на основе ролей
+    
+    ## Безопасность
+    
+    - Пароли хешируются с использованием bcrypt
+    - JWT токены подписываются секретным ключом
+    - Реализован контроль доступа на основе ролей
+    - Валидация всех входящих данных
+    
+    ## Интеграция
+    
+    Сервис интегрируется с API Gateway через HTTP REST API.
+    Все запросы проходят через Gateway с добавлением заголовков трассировки.
+
+  version: 1.0.0
+  contact:
+    name: Service Users Team
+    email: users-team@systemcontrol.ru
+
+servers:
+  - url: http://localhost:8081
+    description: Development сервер
+  - url: http://localhost:18081
+    description: Test сервер  
+  - url: http://service_users:8081
+    description: Docker internal сервер
+
+tags:
+  - name: Registration
+    description: Регистрация пользователей
+  - name: Authentication
+    description: Аутентификация и авторизация
+  - name: Profile
+    description: Управление профилем
+  - name: Users Management
+    description: Управление пользователями (админ)
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - roles
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "Иван Иванов"
+        roles:
+          type: array
+          items:
+            type: string
+            enum: ["user", "admin"]
+          example: ["user"]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string  
+          format: date-time
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          description: Уникальный email пользователя
+        password:
+          type: string
+          minLength: 6
+          description: Пароль (минимум 6 символов)
+        name:
+          type: string
+          minLength: 2
+          description: Полное имя пользователя
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      required:
+        - token
+        - user
+      properties:
+        token:
+          type: string
+          description: JWT токен для авторизации
+        user:
+          $ref: '#/components/schemas/User'
+
+    UpdateProfileRequest:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+
+    ListUsersResponse:
+      type: object
+      required:
+        - users
+        - total
+        - limit
+        - offset
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          type: integer
+          description: Общее количество пользователей
+        limit:
+          type: integer
+          description: Лимит записей на страницу
+        offset:
+          type: integer
+          description: Смещение
+
+    APIResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          $ref: '#/components/schemas/APIError'
+
+    APIError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+            - NOT_FOUND
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - CONFLICT
+            - INTERNAL_SERVER_ERROR
+        message:
+          type: string
+
+paths:
+  /v1/register:
+    post:
+      tags:
+        - Registration
+      summary: Регистрация нового пользователя
+      description: |
+        Создает нового пользователя в системе.
+        
+        Валидация:
+        - Email должен быть уникальным
+        - Пароль минимум 6 символов
+        - Имя минимум 2 символа
+        
+        По умолчанию присваивается роль "user".
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '400':
+          description: Ошибка валидации
+        '409':
+          description: Email уже используется
+        '500':
+          description: Внутренняя ошибка
+
+  /v1/login:
+    post:
+      tags:
+        - Authentication
+      summary: Аутентификация пользователя
+      description: |
+        Проверяет учетные данные и возвращает JWT токен.
+        
+        Токен содержит:
+        - ID пользователя
+        - Email
+        - Роли
+        - Время истечения
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Неверные учетные данные
+        '500':
+          description: Внутренняя ошибка
+
+  /v1/profile:
+    get:
+      tags:
+        - Profile
+      summary: Получить профиль текущего пользователя
+      description: Возвращает данные профиля на основе JWT токена
+      operationId: getProfile
+      responses:
+        '200':
+          description: Данные профиля
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Не авторизован
+        '500':
+          description: Внутренняя ошибка
+
+    put:
+      tags:
+        - Profile
+      summary: Обновить профиль пользователя
+      description: |
+        Обновляет имя и email пользователя.
+        
+        Валидация:
+        - Новый email должен быть уникальным
+        - Имя минимум 2 символа
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Профиль обновлен
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '409':
+          description: Email уже используется
+        '500':
+          description: Внутренняя ошибка
+
+  /v1/users:
+    get:
+      tags:
+        - Users Management
+      summary: Получить список пользователей
+      description: |
+        Возвращает пагинированный список пользователей.
+        Доступно только администраторам.
+        
+        Поддерживает:
+        - Пагинацию
+        - Поиск по имени/email
+        - Фильтрацию по роли
+      operationId: getUsers
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Поиск по имени или email
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: ["user", "admin"]
+          description: Фильтр по роли
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/APIResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ListUsersResponse'
+        '401':
+          description: Не авторизован
+        '403':
+          description: Недостаточно прав (требуется роль admin)
+        '500':
+          description: Внутренняя ошибка
+
+  # Health check endpoint
+  /health:
+    get:
+      tags:
+        - System
+      summary: Проверка состояния сервиса
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Сервис работает нормально
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: ["healthy", "unhealthy"]
+                  service:
+                    type: string
+                    example: "service_users"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  database:
+                    type: string
+                    enum: ["connected", "disconnected"]
+        '503':
+          description: Сервис недоступен
