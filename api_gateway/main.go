@@ -8,20 +8,31 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 	"golang.org/x/time/rate"
 )
 
 const (
-	usersServiceURL  = "http://localhost:8081"
-	ordersServiceURL = "http://localhost:8082"
-	jwtSecret        = "your_secret_key" // В реальном приложении это должно быть в переменных окружения
+	usersServiceURL  = "http://service_users:8081"
+	ordersServiceURL = "http://service_orders:8082"
 )
+
+var jwtSecret = getEnv("JWT_SECRET", "your_secret_key")
+
+// JWTClaims представляет claims для JWT токена
+type JWTClaims struct {
+	UserID uuid.UUID `json:"user_id"`
+	Email  string    `json:"email"`
+	Roles  []string  `json:"roles"`
+	jwt.RegisteredClaims
+}
 
 var ( // Использование глобальных переменных для примера, в реальном приложении лучше использовать DI
 	userProxy  *httputil.ReverseProxy
@@ -93,7 +104,7 @@ func proxyToOrdersService(w http.ResponseWriter, r *http.Request) {
 	orderProxy.ServeHTTP(w, r)
 }
 
-// jwtAuthMiddleware middleware для проверки JWT токена
+// jwtAuthMiddleware middleware для проверки JWT токена и передачи пользовательского контекста
 func jwtAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -104,7 +115,7 @@ func jwtAuthMiddleware(next http.Handler) http.Handler {
 
 		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
 
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("Неожиданный метод подписи: %v", token.Header["alg"])
 			}
@@ -116,8 +127,15 @@ func jwtAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if _, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			// Токен валиден, можно сохранить claims в контекст запроса, если нужно
+		if claims, ok := token.Claims.(*JWTClaims); ok && token.Valid {
+			// Добавляем пользовательский контекст в заголовки для микросервисов
+			r.Header.Set("X-User-ID", claims.UserID.String())
+			r.Header.Set("X-User-Email", claims.Email)
+			r.Header.Set("X-User-Roles", strings.Join(claims.Roles, ","))
+			
+			log.Printf("Пользователь аутентифицирован: ID=%s, Email=%s, Roles=%v", 
+				claims.UserID, claims.Email, claims.Roles)
+			
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -178,4 +196,12 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(response)
+}
+
+// getEnv возвращает значение переменной окружения или значение по умолчанию
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
