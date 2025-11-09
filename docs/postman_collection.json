@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "Система Управления Задачами - API Collection",
-    "description": "Коллекция для тестирования всех endpoints системы управления задачами",
-    "version": "1.0.0",
+    "name": "Система Управления Задачами - Быстрые Тесты",
+    "description": "Упрощенная коллекция для быстрой проверки основных функций API. Для полного тестирования используйте postman_collection_comprehensive.json",
+    "version": "1.1.0",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
