@@ -12,10 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"api_gateway/logger"
+
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
 
@@ -54,6 +57,16 @@ func init() {
 }
 
 func main() {
+	// Инициализация логгера
+	env := getEnv("ENVIRONMENT", "development")
+	if err := logger.Init(env); err != nil {
+		log.Fatalf("Ошибка инициализации логгера: %v", err)
+	}
+	defer logger.Sync()
+
+	log := logger.GetLogger()
+	log.Info("Запуск API Gateway", zap.String("environment", env))
+
 	router := mux.NewRouter()
 
 	// CORS Middleware
@@ -65,9 +78,11 @@ func main() {
 		MaxAge:           300, // 5 минут
 	})
 
-	// Middleware для логирования и X-Request-ID
-	router.Use(loggingMiddleware)
+	// Middleware для X-Request-ID (должен быть первым)
 	router.Use(requestIDMiddleware)
+
+	// Middleware для логирования
+	router.Use(loggingMiddleware)
 
 	// Middleware для ограничения частоты запросов
 	router.Use(rateLimitMiddleware)
@@ -88,19 +103,25 @@ func main() {
 
 	handledRouter := c.Handler(router)
 
-	fmt.Println("API Gateway запущен на порту :8080")
+	log.Info("API Gateway запущен на порту :8080")
 	log.Fatal(http.ListenAndServe(":8080", handledRouter))
 }
 
 // proxyToUsersService проксирует запросы к service_users
 func proxyToUsersService(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Проксирование запроса к Users Service: %s %s", r.Method, r.URL.Path)
+	requestID := r.Header.Get("X-Request-ID")
+
+	logger.LogServiceCall(requestID, "api_gateway", "service_users", r.URL.Path, true, nil)
+
 	userProxy.ServeHTTP(w, r)
 }
 
 // proxyToOrdersService проксирует запросы к service_orders
 func proxyToOrdersService(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Проксирование запроса к Orders Service: %s %s", r.Method, r.URL.Path)
+	requestID := r.Header.Get("X-Request-ID")
+
+	logger.LogServiceCall(requestID, "api_gateway", "service_orders", r.URL.Path, true, nil)
+
 	orderProxy.ServeHTTP(w, r)
 }
 
@@ -132,10 +153,19 @@ func jwtAuthMiddleware(next http.Handler) http.Handler {
 			r.Header.Set("X-User-ID", claims.UserID.String())
 			r.Header.Set("X-User-Email", claims.Email)
 			r.Header.Set("X-User-Roles", strings.Join(claims.Roles, ","))
-			
-			log.Printf("Пользователь аутентифицирован: ID=%s, Email=%s, Roles=%v", 
-				claims.UserID, claims.Email, claims.Roles)
-			
+
+			// Структурированное логирование аутентификации
+			log := logger.GetLogger()
+			requestID := r.Header.Get("X-Request-ID")
+			if requestID != "" {
+				log = logger.WithRequestID(log, requestID)
+			}
+			log = logger.WithUserContext(log, claims.UserID.String(), claims.Email, claims.Roles)
+			log.Info("Пользователь успешно аутентифицирован",
+				zap.String("method", r.Method),
+				zap.String("path", r.URL.Path),
+			)
+
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -147,6 +177,17 @@ func jwtAuthMiddleware(next http.Handler) http.Handler {
 func rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !rateLimiter.Allow() {
+			// Логируем превышение лимита с контекстом
+			log := logger.GetLogger()
+			if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
+				log = logger.WithRequestID(log, requestID)
+			}
+			log.Warn("Rate limit exceeded",
+				zap.String("remote_addr", r.RemoteAddr),
+				zap.String("method", r.Method),
+				zap.String("path", r.URL.Path),
+			)
+
 			respondWithError(w, http.StatusTooManyRequests, "Слишком много запросов")
 			return
 		}
@@ -157,9 +198,38 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 // loggingMiddleware middleware для логирования запросов
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[%s] %s %s %s", time.Now().Format("2006-01-02 15:04:05"), r.RemoteAddr, r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
+		// Создаем wrapper для захвата статус кода
+		wrapper := &responseWrapper{ResponseWriter: w, statusCode: http.StatusOK}
+
+		start := time.Now()
+		next.ServeHTTP(wrapper, r)
+		duration := time.Since(start)
+
+		// Используем новый структурированный логгер
+		logger.LogHTTPRequest(r, wrapper.statusCode, r.Method, r.URL.Path, "api_gateway")
+
+		// Дополнительные метрики
+		log := logger.GetLogger()
+		if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
+			log = logger.WithRequestID(log, requestID)
+		}
+
+		log.Info("Request completed",
+			zap.Duration("duration", duration),
+			zap.Int64("content_length", r.ContentLength),
+		)
 	})
+}
+
+// responseWrapper для захвата HTTP статус кода
+type responseWrapper struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWrapper) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
 
 // requestIDMiddleware middleware для обработки X-Request-ID
@@ -186,12 +256,35 @@ func generateRequestID() string {
 
 // respondWithError отправляет JSON-ответ с ошибкой
 func respondWithError(w http.ResponseWriter, code int, message string) {
+	// Логируем ошибки с уровнем ERROR если код >= 500, иначе WARN
+	log := logger.GetLogger()
+	if code >= 500 {
+		log.Error("HTTP Error Response",
+			zap.Int("status_code", code),
+			zap.String("error_message", message),
+		)
+	} else {
+		log.Warn("HTTP Error Response",
+			zap.Int("status_code", code),
+			zap.String("error_message", message),
+		)
+	}
+
 	respondWithJSON(w, code, map[string]string{"error": message})
 }
 
 // respondWithJSON отправляет JSON-ответ
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
+	response, err := json.Marshal(payload)
+	if err != nil {
+		log := logger.GetLogger()
+		log.Error("Failed to marshal JSON response", zap.Error(err))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Internal server error"}`))
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
