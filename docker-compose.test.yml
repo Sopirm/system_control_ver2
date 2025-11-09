@@ -1,0 +1,112 @@
+version: '3.8'
+
+# Test environment docker-compose
+# Use with: docker-compose -f docker-compose.test.yml up
+
+services:
+  postgres_test:
+    image: postgres:15-alpine
+    container_name: system_control_postgres_test
+    environment:
+      POSTGRES_DB: system_control_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network-test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data  # Использует RAM для ускорения тестов
+
+  api_gateway_test:
+    build:
+      context: ./api_gateway
+      dockerfile: Dockerfile
+      args:
+        - ENVIRONMENT=test
+    container_name: system_control_gateway_test
+    ports:
+      - "18080:8080"
+    env_file:
+      - ./config/environments/test.env
+    environment:
+      - ENVIRONMENT=test
+      - USERS_SERVICE_URL=http://service_users_test:8081
+      - ORDERS_SERVICE_URL=http://service_orders_test:8082
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      service_users_test:
+        condition: service_started
+      service_orders_test:
+        condition: service_started
+    networks:
+      - app-network-test
+
+  service_users_test:
+    build:
+      context: ./service_users
+      dockerfile: Dockerfile
+      args:
+        - ENVIRONMENT=test
+    container_name: system_control_users_test
+    ports:
+      - "18081:8081"
+    env_file:
+      - ./config/environments/test.env
+    environment:
+      - ENVIRONMENT=test
+      - DB_HOST=postgres_test
+      - DB_PORT=5432
+      - DB_NAME=system_control_test
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+    networks:
+      - app-network-test
+
+  service_orders_test:
+    build:
+      context: ./service_orders
+      dockerfile: Dockerfile
+      args:
+        - ENVIRONMENT=test
+    container_name: system_control_orders_test
+    ports:
+      - "18082:8082"
+    env_file:
+      - ./config/environments/test.env
+    environment:
+      - ENVIRONMENT=test
+      - DB_HOST=postgres_test
+      - DB_PORT=5432
+      - DB_NAME=system_control_test
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - USERS_SERVICE_URL=http://service_users_test:8081
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      service_users_test:
+        condition: service_started
+    networks:
+      - app-network-test
+
+networks:
+  app-network-test:
+    driver: bridge
+    name: system_control_network_test
+
+volumes:
+  postgres_data_test:
+    name: system_control_postgres_test

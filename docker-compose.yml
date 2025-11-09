@@ -1,72 +1,107 @@
 version: '3.8'
 
+# Base docker-compose file for development
+# Use with: docker-compose -f docker-compose.yml up
+
 services:
   postgres:
     image: postgres:15-alpine
+    container_name: system_control_postgres_dev
     environment:
-      POSTGRES_DB: system_control
+      POSTGRES_DB: system_control_dev
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_dev:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   api_gateway:
     build:
       context: ./api_gateway
-      dockerfile: Dockerfile 
+      dockerfile: Dockerfile
+    container_name: system_control_gateway_dev
     ports:
       - "8080:8080"
+    env_file:
+      - ./config/environments/development.env
     environment:
-      - JWT_SECRET=your_secret_key
+      - ENVIRONMENT=development
+      - USERS_SERVICE_URL=http://service_users:8081
+      - ORDERS_SERVICE_URL=http://service_orders:8082
     depends_on:
-      - service_users
-      - service_orders
-      - postgres
+      postgres:
+        condition: service_healthy
+      service_users:
+        condition: service_started
+      service_orders:
+        condition: service_started
     networks:
       - app-network
+    restart: unless-stopped
 
   service_users:
     build:
       context: ./service_users
-      dockerfile: Dockerfile 
+      dockerfile: Dockerfile
+    container_name: system_control_users_dev
     ports:
       - "8081:8081"
+    env_file:
+      - ./config/environments/development.env
     environment:
+      - ENVIRONMENT=development
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=system_control
+      - DB_NAME=system_control_dev
       - DB_USER=postgres
       - DB_PASSWORD=postgres
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - app-network
+    restart: unless-stopped
 
   service_orders:
     build:
       context: ./service_orders
-      dockerfile: Dockerfile 
+      dockerfile: Dockerfile
+    container_name: system_control_orders_dev
     ports:
       - "8082:8082"
+    env_file:
+      - ./config/environments/development.env
     environment:
+      - ENVIRONMENT=development
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=system_control
+      - DB_NAME=system_control_dev
       - DB_USER=postgres
       - DB_PASSWORD=postgres
+      - USERS_SERVICE_URL=http://service_users:8081
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      service_users:
+        condition: service_started
     networks:
       - app-network
+    restart: unless-stopped
 
 networks:
   app-network:
     driver: bridge
+    name: system_control_network_dev
 
 volumes:
-  postgres_data:
+  postgres_data_dev:
+    name: system_control_postgres_dev

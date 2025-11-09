@@ -1,0 +1,188 @@
+version: '3.8'
+
+# Production environment docker-compose
+# Use with: docker-compose -f docker-compose.production.yml up -d
+
+services:
+  postgres_prod:
+    image: postgres:15-alpine
+    container_name: system_control_postgres_prod
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /etc/ssl/certs:/etc/ssl/certs:ro  # SSL сертификаты
+    networks:
+      - app-network-prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  redis_prod:
+    image: redis:7-alpine
+    container_name: system_control_redis_prod
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data_prod:/data
+    networks:
+      - app-network-prod
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+
+  api_gateway_prod:
+    build:
+      context: ./api_gateway
+      dockerfile: Dockerfile
+      args:
+        - ENVIRONMENT=production
+    container_name: system_control_gateway_prod
+    ports:
+      - "80:8080"
+      - "443:8443"  # HTTPS
+    env_file:
+      - ./config/environments/production.env
+    environment:
+      - ENVIRONMENT=production
+      - USERS_SERVICE_URL=http://service_users_prod:8081
+      - ORDERS_SERVICE_URL=http://service_orders_prod:8082
+    volumes:
+      - /var/log/system_control:/var/log/system_control
+      - ${TLS_CERT_FILE}:/etc/ssl/certs/server.crt:ro
+      - ${TLS_KEY_FILE}:/etc/ssl/private/server.key:ro
+    depends_on:
+      postgres_prod:
+        condition: service_healthy
+      redis_prod:
+        condition: service_healthy
+      service_users_prod:
+        condition: service_started
+      service_orders_prod:
+        condition: service_started
+    networks:
+      - app-network-prod
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  service_users_prod:
+    build:
+      context: ./service_users
+      dockerfile: Dockerfile
+      args:
+        - ENVIRONMENT=production
+    container_name: system_control_users_prod
+    env_file:
+      - ./config/environments/production.env
+    environment:
+      - ENVIRONMENT=production
+      - DB_HOST=postgres_prod
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis_prod
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - /var/log/system_control:/var/log/system_control
+    depends_on:
+      postgres_prod:
+        condition: service_healthy
+      redis_prod:
+        condition: service_healthy
+    networks:
+      - app-network-prod
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  service_orders_prod:
+    build:
+      context: ./service_orders
+      dockerfile: Dockerfile
+      args:
+        - ENVIRONMENT=production
+    container_name: system_control_orders_prod
+    env_file:
+      - ./config/environments/production.env
+    environment:
+      - ENVIRONMENT=production
+      - DB_HOST=postgres_prod
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis_prod
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - USERS_SERVICE_URL=http://service_users_prod:8081
+      - KAFKA_BROKERS=${KAFKA_BROKERS}
+    volumes:
+      - /var/log/system_control:/var/log/system_control
+    depends_on:
+      postgres_prod:
+        condition: service_healthy
+      redis_prod:
+        condition: service_healthy
+      service_users_prod:
+        condition: service_started
+    networks:
+      - app-network-prod
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+networks:
+  app-network-prod:
+    driver: bridge
+    name: system_control_network_prod
+
+volumes:
+  postgres_data_prod:
+    name: system_control_postgres_prod
+  redis_data_prod:
+    name: system_control_redis_prod
