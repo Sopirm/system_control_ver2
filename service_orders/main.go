@@ -90,6 +90,8 @@ func main() {
 	router.HandleFunc("/v1/orders", orderHandler.ListOrders).Methods("GET")
 	router.HandleFunc("/v1/orders/{id}/status", orderHandler.UpdateOrderStatus).Methods("PUT")
 	router.HandleFunc("/v1/orders/{id}/cancel", orderHandler.CancelOrder).Methods("PUT")
+	// Совместимость с тестами: поддерживаем также POST для отмены заказа
+	router.HandleFunc("/v1/orders/{id}/cancel", orderHandler.CancelOrder).Methods("POST")
 
 	// Дополнительный endpoint для статистики событий (для мониторинга)
 	router.HandleFunc("/v1/events/stats", func(w http.ResponseWriter, r *http.Request) {

@@ -22,38 +22,39 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const (
-	usersServiceURL  = "http://service_users:8081"
-	ordersServiceURL = "http://service_orders:8082"
+var (
+    // URL сервисов берём из переменных окружения, чтобы избежать ошибок проксирования
+    usersServiceURL  = getEnv("USERS_SERVICE_URL", "http://service_users:8081")
+    ordersServiceURL = getEnv("ORDERS_SERVICE_URL", "http://service_orders:8082")
 )
 
 var jwtSecret = getEnv("JWT_SECRET", "your_secret_key")
 
 // JWTClaims представляет claims для JWT токена
 type JWTClaims struct {
-	UserID uuid.UUID `json:"user_id"`
-	Email  string    `json:"email"`
-	Roles  []string  `json:"roles"`
-	jwt.RegisteredClaims
+    UserID uuid.UUID `json:"user_id"`
+    Email  string    `json:"email"`
+    Roles  []string  `json:"roles"`
+    jwt.RegisteredClaims
 }
 
 var ( // Использование глобальных переменных для примера, в реальном приложении лучше использовать DI
-	userProxy  *httputil.ReverseProxy
-	orderProxy *httputil.ReverseProxy
+    userProxy  *httputil.ReverseProxy
+    orderProxy *httputil.ReverseProxy
 
-	rateLimiter *rate.Limiter
+    rateLimiter *rate.Limiter
 )
 
 func init() {
-	// Инициализация прокси-серверов
-	userURL, _ := url.Parse(usersServiceURL)
-	userProxy = httputil.NewSingleHostReverseProxy(userURL)
+    // Инициализация прокси-серверов
+    userURL, _ := url.Parse(usersServiceURL)
+    userProxy = httputil.NewSingleHostReverseProxy(userURL)
 
-	orderURL, _ := url.Parse(ordersServiceURL)
-	orderProxy = httputil.NewSingleHostReverseProxy(orderURL)
+    orderURL, _ := url.Parse(ordersServiceURL)
+    orderProxy = httputil.NewSingleHostReverseProxy(orderURL)
 
-	// Инициализация ограничителя частоты запросов: 1 запрос в секунду с "burst" в 5 запросов
-	rateLimiter = rate.NewLimiter(rate.Every(time.Second), 5)
+    // Инициализация ограничителя частоты запросов: 1 запрос в секунду с "burst" в 5 запросов
+    rateLimiter = rate.NewLimiter(rate.Every(time.Second), 5)
 }
 
 func main() {
@@ -66,6 +67,11 @@ func main() {
 
 	zapLogger := logger.GetLogger()
 	zapLogger.Info("Запуск API Gateway", zap.String("environment", env))
+	// Логируем целевые сервисы для диагностики
+	zapLogger.Info("Конфигурация upstream сервисов",
+		zap.String("users_service_url", usersServiceURL),
+		zap.String("orders_service_url", ordersServiceURL),
+	)
 
 	router := mux.NewRouter()
 

@@ -1,0 +1,1066 @@
+{
+	"info": {
+		"_postman_id": "8366e6ee-65c5-4752-ad5d-0a8f4c509f30",
+		"name": "Система Управления Задачами - Тест-кейсы ТЗ",
+		"description": "Строго по тест-кейсам из ТЗ: минимальный набор для оценок 3-4-5",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "45222090",
+		"_collection_link": "https://maks-2781645.postman.co/workspace/Maks's-Workspace~cfe86480-0b3e-4d59-8238-d54d757572dc/collection/45222090-8366e6ee-65c5-4752-ad5d-0a8f4c509f30?action=share&source=collection_link&creator=45222090"
+	},
+	"item": [
+		{
+			"name": "ПОЛЬЗОВАТЕЛИ",
+			"item": [
+				{
+					"name": "Успешная регистрация с валидными полями",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Генерируем уникальный email",
+									"const timestamp = Date.now();",
+									"const email = `tz_user_${timestamp}@test.com`;",
+									"pm.collectionVariables.set('testUserEmail', email);"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем статус успех и созданный идентификатор",
+									"pm.test('Статус успех', function () {",
+									"    pm.response.to.have.status(201);",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.success).to.equal(true, 'Поле success должно быть true');",
+									"});",
+									"",
+									"pm.test('Созданный идентификатор присутствует', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.have.property('id');",
+									"    pm.expect(response.data.id).to.not.be.empty;",
+									"    ",
+									"    // Проверяем формат UUID",
+									"    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+									"    pm.expect(response.data.id).to.match(uuidRegex, 'ID должен быть в формате UUID');",
+									"    ",
+									"    // Сохраняем для последующих тестов",
+									"    pm.collectionVariables.set('userId', response.data.id);",
+									"});",
+									"",
+									"pm.test('Валидные поля корректно обработаны', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data.email).to.equal(pm.collectionVariables.get('testUserEmail'));",
+									"    pm.expect(response.data.name).to.equal('ТЗ Тест Пользователь');",
+									"    pm.expect(response.data.roles).to.include('user');",
+									"});",
+									"",
+									"console.log('Тест 1/9: Успешная регистрация - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"password\": \"TestPassword123!\",\n  \"name\": \"ТЗ Тест Пользователь\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/users/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"users",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Повторная регистрация с той же почтой",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем контролируемую ошибку",
+									"pm.test('Контролируемая ошибка при повторной регистрации', function () {",
+									"    pm.response.to.have.status(409); // Conflict",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.success).to.equal(false, 'При ошибке success должно быть false');",
+									"});",
+									"",
+									"pm.test('Ошибка содержит понятное сообщение', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property('error');",
+									"    pm.expect(response.error).to.have.property('code');",
+									"    pm.expect(response.error).to.have.property('message');",
+									"    pm.expect(response.error.message.toLowerCase()).to.include('email');",
+									"});",
+									"",
+									"pm.test('Данные пользователя не возвращаются при ошибке', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.be.undefined;",
+									"});",
+									"",
+									"console.log('Тест 2/9: Повторная регистрация - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"password\": \"TestPassword123!\",\n  \"name\": \"Другой Пользователь\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/users/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"users",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Вход с правильными данными",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем выдачу токена",
+									"pm.test('Успешный вход', function () {",
+									"    if (pm.response.code !== 200) {",
+									"        console.log('Ошибка входа:', pm.response.json());",
+									"        console.log('Используемый email:', pm.collectionVariables.get('testUserEmail'));",
+									"    }",
+									"    pm.response.to.have.status(200);",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.success).to.equal(true, 'При успешном входе success должно быть true');",
+									"});",
+									"",
+									"pm.test('Выдача токена', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.have.property('token');",
+									"    pm.expect(response.data.token).to.not.be.empty;",
+									"    ",
+									"    // Проверяем формат JWT (3 части разделенные точками)",
+									"    const tokenParts = response.data.token.split('.');",
+									"    pm.expect(tokenParts).to.have.lengthOf(3, 'JWT токен должен состоять из 3 частей');",
+									"    ",
+									"    // Сохраняем токен для последующих тестов",
+									"    pm.collectionVariables.set('userToken', response.data.token);",
+									"});",
+									"",
+									"pm.test('Токен содержит корректные данные пользователя', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.have.property('user');",
+									"    pm.expect(response.data.user.id).to.equal(pm.collectionVariables.get('userId'));",
+									"    pm.expect(response.data.user.email).to.equal(pm.collectionVariables.get('testUserEmail'));",
+									"});",
+									"",
+									"console.log('Тест 3/9: Вход с правильными данными - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"password\": \"TestPassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/users/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"users",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Доступ к защищённому пути без токена",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем отказ",
+									"pm.test('Отказ в доступе без токена', function () {",
+									"    pm.response.to.have.status(401); // Unauthorized",
+									"});",
+									"",
+									"pm.test('Ошибка авторизации содержит понятное сообщение', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property('error');",
+									"    pm.expect(response.error).to.include('токен');",
+									"});",
+									"",
+									"pm.test('Защищенные данные не возвращаются', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.be.undefined;",
+									"});",
+									"",
+									"console.log('Тест 4/9: Доступ без токена - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/v1/users/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"users",
+								"profile"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Тесты пользователей согласно ТЗ"
+		},
+		{
+			"name": "ЗАКАЗЫ + ПОЛЬЗОВАТЕЛИ",
+			"item": [
+				{
+					"name": "Создание заказа для авторизованного пользователя",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем успех и статус создан",
+									"pm.test('Успешное создание заказа', function () {",
+									"    pm.response.to.have.status(201); // Created",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.success).to.equal(true, 'При успешном создании success должно быть true');",
+									"});",
+									"",
+									"pm.test('Статус заказа \"создан\"', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.have.property('status', 'создан', 'Новый заказ должен иметь статус \"создан\"');",
+									"});",
+									"",
+									"pm.test('Заказ принадлежит авторизованному пользователю', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.have.property('user_id');",
+									"    pm.expect(response.data.user_id).to.equal(pm.collectionVariables.get('userId'), 'Заказ должен принадлежать авторизованному пользователю');",
+									"    ",
+									"    // Сохраняем ID заказа для последующих тестов",
+									"    pm.collectionVariables.set('orderId', response.data.id);",
+									"});",
+									"",
+									"pm.test('Заказ содержит все необходимые поля', function () {",
+									"    const response = pm.response.json();",
+									"    const order = response.data;",
+									"    ",
+									"    pm.expect(order).to.have.property('id');",
+									"    pm.expect(order).to.have.property('items');",
+									"    pm.expect(order).to.have.property('total_sum');",
+									"    pm.expect(order).to.have.property('created_at');",
+									"    pm.expect(order.items).to.be.an('array');",
+									"    pm.expect(order.items).to.have.lengthOf(2);",
+									"});",
+									"",
+									"console.log('Тест 5/9: Создание заказа - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{userToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"items\": [\n    {\n      \"product\": \"ТЗ Тест Продукт 1\",\n      \"quantity\": 2,\n      \"price\": 1000.00\n    },\n    {\n      \"product\": \"ТЗ Тест Продукт 2\",\n      \"quantity\": 1,\n      \"price\": 500.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"orders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Создание заказа без токена (ожидаем 401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: Создание заказа без токена должно быть запрещено",
+									"pm.test('Отказ при создании заказа без токена', function () {",
+									"    pm.response.to.have.status(401);",
+									"});",
+									"",
+									"pm.test('Ошибка авторизации содержит понятное сообщение', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property('error');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"items\": [\n    {\n      \"product\": \"ТЗ Тест Продукт 1\",\n      \"quantity\": 2,\n      \"price\": 1000.00\n    },\n    {\n      \"product\": \"ТЗ Тест Продукт 2\",\n      \"quantity\": 1,\n      \"price\": 500.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"orders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Получение своего заказа",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем успех",
+									"pm.test('Успешное получение своего заказа', function () {",
+									"    pm.response.to.have.status(200);",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.success).to.equal(true, 'При успешном получении success должно быть true');",
+									"});",
+									"",
+									"pm.test('Возвращается корректный заказ', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.have.property('id', pm.collectionVariables.get('orderId'), 'Должен вернуться заказ с правильным ID');",
+									"    pm.expect(response.data).to.have.property('user_id', pm.collectionVariables.get('userId'), 'Заказ должен принадлежать текущему пользователю');",
+									"});",
+									"",
+									"pm.test('Заказ содержит все детали', function () {",
+									"    const response = pm.response.json();",
+									"    const order = response.data;",
+									"    ",
+									"    pm.expect(order).to.have.property('status', 'создан');",
+									"    pm.expect(order).to.have.property('items');",
+									"    pm.expect(order).to.have.property('total_sum', 2500);",
+									"    pm.expect(order.items).to.be.an('array');",
+									"    pm.expect(order.items).to.have.lengthOf(2);",
+									"});",
+									"",
+									"console.log('Тест 6/9: Получение своего заказа - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{userToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/v1/orders/{{orderId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"orders",
+								"{{orderId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Список своих заказов с пагинацией",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем корректные поля и навигацию по страницам",
+									"pm.test('Успешное получение списка заказов', function () {",
+									"    pm.response.to.have.status(200);",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.success).to.equal(true, 'При успешном получении success должно быть true');",
+									"});",
+									"",
+									"pm.test('Корректные поля списка', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data, 'Должен быть массив заказов').to.have.property('orders');",
+									"    pm.expect(response.data, 'Должно быть общее количество').to.have.property('total');",
+									"    pm.expect(response.data, 'Должен быть лимит').to.have.property('limit');",
+									"    pm.expect(response.data, 'Должен быть offset').to.have.property('offset');",
+									"    ",
+									"    pm.expect(response.data.orders).to.be.an('array');",
+									"    pm.expect(response.data.total).to.be.a('number');",
+									"    pm.expect(response.data.limit).to.be.a('number');",
+									"    pm.expect(response.data.offset).to.be.a('number');",
+									"});",
+									"",
+									"pm.test('Навигация по страницам (пагинация)', function () {",
+									"    const response = pm.response.json();",
+									"    ",
+									"    // Проверяем что параметры пагинации соответствуют запросу",
+									"    pm.expect(response.data.limit).to.equal(10, 'Лимит должен соответствовать запросу');",
+									"    pm.expect(response.data.offset).to.equal(0, 'Offset должен соответствовать запросу');",
+									"    ",
+									"    // Проверяем что есть хотя бы один заказ (наш созданный)",
+									"    pm.expect(response.data.total).to.be.at.least(1, 'Должен быть минимум один заказ');",
+									"    ",
+									"    // Проверяем что наш заказ есть в списке",
+									"    const orderIds = response.data.orders.map(o => o.id);",
+									"    pm.expect(orderIds).to.include(pm.collectionVariables.get('orderId'), 'Наш заказ должен быть в списке');",
+									"});",
+									"",
+									"pm.test('Все заказы принадлежат текущему пользователю', function () {",
+									"    const response = pm.response.json();",
+									"    const currentUserId = pm.collectionVariables.get('userId');",
+									"    ",
+									"    response.data.orders.forEach((order, index) => {",
+									"        pm.expect(order.user_id).to.equal(currentUserId, `Заказ ${index + 1} должен принадлежать текущему пользователю`);",
+									"    });",
+									"});",
+									"",
+									"console.log('Тест 7/9: Список заказов с пагинацией - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{userToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/v1/orders?limit=10&offset=0",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"orders"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Тесты заказов + пользователей согласно ТЗ"
+		},
+		{
+			"name": "БЕЗОПАСНОСТЬ",
+			"item": [
+				{
+					"name": "Подготовка: Создание второго пользователя",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Создаем второго пользователя для тестов безопасности",
+									"const timestamp = Date.now();",
+									"const email = `tz_user2_${timestamp}@test.com`;",
+									"pm.collectionVariables.set('testUser2Email', email);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Второй пользователь создан', function () {",
+									"    pm.response.to.have.status(201);",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('user2Id', response.data.id);",
+									"});",
+									"",
+									"console.log('🔧 Подготовка: Второй пользователь создан');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{testUser2Email}}\",\n  \"password\": \"TestPassword123!\",\n  \"name\": \"ТЗ Второй Пользователь\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/users/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"users",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Подготовка: Аутентификация второго пользователя",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Второй пользователь аутентифицирован', function () {",
+									"    pm.response.to.have.status(200);",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('user2Token', response.data.token);",
+									"});",
+									"",
+									"console.log('🔧 Подготовка: Второй пользователь аутентифицирован');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{testUser2Email}}\",\n  \"password\": \"TestPassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/users/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"users",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Подготовка: Создание заказа вторым пользователем",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Заказ второго пользователя создан', function () {",
+									"    pm.response.to.have.status(201);",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('user2OrderId', response.data.id);",
+									"});",
+									"",
+									"console.log('🔧 Подготовка: Заказ второго пользователя создан');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{user2Token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"items\": [\n    {\n      \"product\": \"Чужой продукт\",\n      \"quantity\": 1,\n      \"price\": 800.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"orders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Попытка обновить чужой заказ",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем отказ",
+									"pm.test('Отказ при попытке обновить чужой заказ', function () {",
+									"    // Если нет токена, будет 401, если есть токен но не наш заказ - 403 или 404",
+									"    pm.expect([401, 403, 404]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Ошибка доступа содержит понятное сообщение', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response).to.have.property('error');",
+									"    // Для простого формата ошибки",
+									"    if (typeof response.error === 'string') {",
+									"        pm.expect(response.error.length).to.be.above(0);",
+									"    } else {",
+									"        pm.expect(response.error).to.have.property('message');",
+									"    }",
+									"});",
+									"",
+									"pm.test('Чужой заказ не обновляется', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.be.undefined;",
+									"});",
+									"",
+									"console.log('Тест 8/9: Попытка обновить чужой заказ - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{userToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"в работе\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/orders/{{user2OrderId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"orders",
+								"{{user2OrderId}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Отмена собственного заказа",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// ТЗ: ожидаем статус отменён и отсутствие побочных эффектов",
+									"pm.test('Успешная отмена собственного заказа', function () {",
+									"    pm.response.to.have.status(200);",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.success).to.equal(true, 'При успешной отмене success должно быть true');",
+									"});",
+									"",
+									"pm.test('Статус заказа \"отменён\"', function () {",
+									"    const response = pm.response.json();",
+									"    pm.expect(response.data).to.have.property('status', 'отменён', 'Статус заказа должен быть \"отменён\"');",
+									"});",
+									"",
+									"pm.test('Отсутствие побочных эффектов', function () {",
+									"    const response = pm.response.json();",
+									"    const order = response.data;",
+									"    ",
+									"    // Проверяем что основные поля заказа не изменились",
+									"    pm.expect(order.id).to.equal(pm.collectionVariables.get('orderId'), 'ID заказа не должен измениться');",
+									"    pm.expect(order.user_id).to.equal(pm.collectionVariables.get('userId'), 'Владелец заказа не должен измениться');",
+									"    pm.expect(order.total_sum).to.equal(2500, 'Сумма заказа не должна измениться');",
+									"    pm.expect(order.items).to.be.an('array', 'Позиции заказа должны остаться');",
+									"    pm.expect(order.items).to.have.lengthOf(2, 'Количество позиций не должно измениться');",
+									"});",
+									"",
+									"pm.test('Временные метки корректно обновлены', function () {",
+									"    const response = pm.response.json();",
+									"    const order = response.data;",
+									"    ",
+									"    pm.expect(order).to.have.property('created_at');",
+									"    pm.expect(order).to.have.property('updated_at');",
+									"    ",
+									"    const createdAt = new Date(order.created_at);",
+									"    const updatedAt = new Date(order.updated_at);",
+									"    ",
+									"    pm.expect(updatedAt.getTime()).to.be.at.least(createdAt.getTime(), 'updated_at должен быть больше или равен created_at');",
+									"});",
+									"",
+									"console.log('Тест 9/9: Отмена собственного заказа - ПРОЙДЕН');"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{userToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Request-ID",
+								"value": "tz-test-{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "{{baseUrl}}/v1/orders/{{orderId}}/cancel",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v1",
+								"orders",
+								"{{orderId}}",
+								"cancel"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Тесты безопасности согласно ТЗ"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"exec": [
+					"// Глобальная настройка для тестов ТЗ",
+					"console.log(`📋 ТЗ Тест: ${pm.info.requestName}`);"
+				],
+				"type": "text/javascript"
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"exec": [
+					"// Глобальные проверки для всех тестов ТЗ",
+					"pm.test('📋 ТЗ: Время отклика приемлемо', function () {",
+					"    pm.expect(pm.response.responseTime).to.be.below(5000, 'Время отклика должно быть менее 5 секунд');",
+					"});",
+					"",
+					"pm.test('📋 ТЗ: Content-Type корректный', function () {",
+					"    if (pm.response.headers.has('Content-Type')) {",
+					"        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+					"    }",
+					"});",
+					"",
+					"pm.test('📋 ТЗ: Валидный JSON ответ', function () {",
+					"    pm.expect(() => pm.response.json()).to.not.throw();",
+					"});",
+					"",
+					"// Логирование результата",
+					"const status = pm.response.code;",
+					"const time = pm.response.responseTime;",
+					"if (status >= 200 && status < 300) {",
+					"    console.log(`✅ ${pm.info.requestName}: ${status} (${time}ms)`);",
+					"} else if (status >= 400) {",
+					"    console.log(`⚠️  ${pm.info.requestName}: ${status} (${time}ms) - Ожидаемая ошибка`);",
+					"}"
+				],
+				"type": "text/javascript"
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "testUserEmail",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "testUser2Email",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user2Token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user2Id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "orderId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user2OrderId",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

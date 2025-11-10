@@ -17,6 +17,11 @@ type UserContext struct {
 
 // GetUserContextFromHeaders извлекает пользовательский контекст из заголовков HTTP
 func GetUserContextFromHeaders(r *http.Request) (*UserContext, error) {
+	// Минимальная проверка: требуем наличие заголовка Authorization (JWT должен приходить от API Gateway)
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return nil, fmt.Errorf("отсутствует заголовок Authorization")
+	}
 	userIDStr := r.Header.Get("X-User-ID")
 	if userIDStr == "" {
 		return nil, fmt.Errorf("отсутствует заголовок X-User-ID")

@@ -21,201 +21,201 @@ import (
 
 // UserHandler обработчик для пользователей
 type UserHandler struct {
-	userRepo repository.UserRepository
-	config   *config.Config
+    userRepo repository.UserRepository
+    config   *config.Config
 }
 
 // NewUserHandler создает новый обработчик пользователей
 func NewUserHandler(userRepo repository.UserRepository, config *config.Config) *UserHandler {
-	return &UserHandler{
-		userRepo: userRepo,
-		config:   config,
-	}
+    return &UserHandler{
+        userRepo: userRepo,
+        config:   config,
+    }
 }
 
 // RegisterUser обрабатывает регистрацию нового пользователя
 func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
-	var req models.RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, "Некорректный JSON")
-		return
-	}
+    var req models.RegisterRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, "Некорректный JSON")
+        return
+    }
 
-	// Валидация входных данных
-	if err := utils.ValidateStruct(req); err != nil {
-		h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, err.Error())
-		return
-	}
+    // Валидация входных данных
+    if err := utils.ValidateStruct(req); err != nil {
+        h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, err.Error())
+        return
+    }
 
-	// Проверка существования email
-	exists, err := h.userRepo.EmailExists(req.Email)
-	if err != nil {
-		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка проверки email")
-		return
-	}
-	if exists {
-		h.sendErrorResponse(w, http.StatusConflict, models.ErrorCodeConflict, "Пользователь с таким email уже существует")
-		return
-	}
+    // Нормализуем email (обрезаем пробелы и приводим к нижнему регистру)
+    email := strings.TrimSpace(strings.ToLower(req.Email))
 
-	// Хеширование пароля
-	hashedPassword, err := utils.HashPassword(req.Password)
-	if err != nil {
-		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка обработки пароля")
-		return
-	}
+    // Проверка существования email
+    exists, err := h.userRepo.EmailExists(email)
+    if err != nil {
+        h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка проверки email")
+        return
+    }
+    if exists {
+        h.sendErrorResponse(w, http.StatusConflict, models.ErrorCodeConflict, "Пользователь с таким email уже существует")
+        return
+    }
 
-	// Создание пользователя
-	user := &models.User{
-		ID:        uuid.New(),
-		Email:     req.Email,
-		Password:  hashedPassword,
-		Name:      req.Name,
-		Roles:     pq.StringArray{"user"},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
+    // Хеширование пароля
+    hashedPassword, err := utils.HashPassword(req.Password)
+    if err != nil {
+        h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка обработки пароля")
+        return
+    }
 
-	if err := h.userRepo.Create(user); err != nil {
-		logger.LogAuthEvent(r, "registration", req.Email, false, err.Error())
-		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка создания пользователя")
-		return
-	}
+    // Создание пользователя
+    user := &models.User{
+        ID:        uuid.New(),
+        Email:     email,
+        Password:  hashedPassword,
+        Name:      req.Name,
+        Roles:     pq.StringArray{"user"},
+        CreatedAt: time.Now(),
+        UpdatedAt: time.Now(),
+    }
 
-	// Логируем успешную регистрацию
-	logger.LogAuthEvent(r, "registration", req.Email, true, "")
+    if err := h.userRepo.Create(user); err != nil {
+        logger.LogAuthEvent(r, "registration", email, false, err.Error())
+        h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка создания пользователя")
+        return
+    }
 
-	// Очищаем пароль перед отправкой
-	user.Password = ""
-	h.sendSuccessResponse(w, http.StatusCreated, user)
+    // Логируем успешную регистрацию
+    logger.LogAuthEvent(r, "registration", email, true, "")
+
+    // Очищаем пароль перед отправкой
+    user.Password = ""
+    h.sendSuccessResponse(w, http.StatusCreated, user)
 }
 
 // LoginUser обрабатывает вход пользователя
 func (h *UserHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
-	var req models.LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, "Некорректный JSON")
-		return
-	}
+    var req models.LoginRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, "Некорректный JSON")
+        return
+    }
 
-	// Валидация входных данных
-	if err := utils.ValidateStruct(req); err != nil {
-		h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, err.Error())
-		return
-	}
+    // Валидация входных данных
+    if err := utils.ValidateStruct(req); err != nil {
+        h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, err.Error())
+        return
+    }
 
-	// Поиск пользователя по email
-	user, err := h.userRepo.GetByEmail(req.Email)
-	if err != nil {
-		logger.LogAuthEvent(r, "login", req.Email, false, "User not found")
-		h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Неверный email или пароль")
-		return
-	}
+    // Нормализуем email
+    email := strings.TrimSpace(strings.ToLower(req.Email))
 
-	// Проверка пароля
-	if !utils.CheckPassword(req.Password, user.Password) {
-		logger.LogAuthEvent(r, "login", req.Email, false, "Invalid password")
-		h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Неверный email или пароль")
-		return
-	}
+    // Поиск пользователя по email
+    user, err := h.userRepo.GetByEmail(email)
+    if err != nil {
+        logger.LogAuthEvent(r, "login", email, false, err.Error())
+        h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Неверный email или пароль")
+        return
+    }
 
-	// Генерация JWT токена
-	token, err := utils.GenerateJWT(user, h.config.JWT.Secret)
-	if err != nil {
-		logger.LogAuthEvent(r, "login", req.Email, false, "Token generation failed")
-		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка генерации токена")
-		return
-	}
+    // Проверка пароля
+    if !utils.CheckPassword(req.Password, user.Password) {
+        logger.LogAuthEvent(r, "login", email, false, "Invalid password")
+        h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Неверный email или пароль")
+        return
+    }
 
-	// Логируем успешный вход
-	logger.LogAuthEvent(r, "login", req.Email, true, "")
+    // Генерация JWT токена
+    token, err := utils.GenerateJWT(user, h.config.JWT.Secret)
+    if err != nil {
+        logger.LogAuthEvent(r, "login", email, false, "Token generation failed")
+        h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка генерации токена")
+        return
+    }
 
-	// Очищаем пароль перед отправкой
-	user.Password = ""
-	
-	response := models.LoginResponse{
-		Token: token,
-		User:  *user,
-	}
+    // Логируем успешный вход
+    logger.LogAuthEvent(r, "login", email, true, "")
 
-	h.sendSuccessResponse(w, http.StatusOK, response)
+    // Очищаем пароль перед отправкой
+    user.Password = ""
+
+    response := models.LoginResponse{
+        Token: token,
+        User:  *user,
+    }
+
+    h.sendSuccessResponse(w, http.StatusOK, response)
 }
 
 // GetUserProfile возвращает профиль текущего пользователя
 func (h *UserHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
-	userID, err := h.getUserIDFromContext(r)
-	if err != nil {
-		h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Не удалось получить ID пользователя")
-		return
-	}
+    userID, err := h.getUserIDFromContext(r)
+    if err != nil {
+        h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Не удалось получить ID пользователя")
+        return
+    }
 
-	user, err := h.userRepo.GetByID(userID)
-	if err != nil {
-		h.sendErrorResponse(w, http.StatusNotFound, models.ErrorCodeNotFound, "Пользователь не найден")
-		return
-	}
+    user, err := h.userRepo.GetByID(userID)
+    if err != nil {
+        h.sendErrorResponse(w, http.StatusNotFound, models.ErrorCodeNotFound, "Пользователь не найден")
+        return
+    }
 
-	// Очищаем пароль перед отправкой
-	user.Password = ""
-	h.sendSuccessResponse(w, http.StatusOK, user)
+    user.Password = ""
+    h.sendSuccessResponse(w, http.StatusOK, user)
 }
 
 // UpdateUserProfile обновляет профиль пользователя
 func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
-	userID, err := h.getUserIDFromContext(r)
-	if err != nil {
-		h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Не удалось получить ID пользователя")
-		return
-	}
+    userID, err := h.getUserIDFromContext(r)
+    if err != nil {
+        h.sendErrorResponse(w, http.StatusUnauthorized, models.ErrorCodeUnauthorized, "Не удалось получить ID пользователя")
+        return
+    }
 
-	var req models.UpdateProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, "Некорректный JSON")
-		return
-	}
+    var req models.UpdateProfileRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, "Некорректный JSON")
+        return
+    }
 
-	// Валидация входных данных
-	if err := utils.ValidateStruct(req); err != nil {
-		h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, err.Error())
-		return
-	}
+    if err := utils.ValidateStruct(req); err != nil {
+        h.sendErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, err.Error())
+        return
+    }
 
-	// Получение текущего пользователя
-	user, err := h.userRepo.GetByID(userID)
-	if err != nil {
-		h.sendErrorResponse(w, http.StatusNotFound, models.ErrorCodeNotFound, "Пользователь не найден")
-		return
-	}
+    user, err := h.userRepo.GetByID(userID)
+    if err != nil {
+        h.sendErrorResponse(w, http.StatusNotFound, models.ErrorCodeNotFound, "Пользователь не найден")
+        return
+    }
 
-	// Проверка уникальности email (если изменился)
-	if user.Email != req.Email {
-		exists, err := h.userRepo.EmailExists(req.Email)
-		if err != nil {
-			h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка проверки email")
-			return
-		}
-		if exists {
-			h.sendErrorResponse(w, http.StatusConflict, models.ErrorCodeConflict, "Пользователь с таким email уже существует")
-			return
-		}
-	}
+    // Проверка уникальности email (если изменился)
+    if user.Email != req.Email {
+        exists, err := h.userRepo.EmailExists(strings.TrimSpace(strings.ToLower(req.Email)))
+        if err != nil {
+            h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка проверки email")
+            return
+        }
+        if exists {
+            h.sendErrorResponse(w, http.StatusConflict, models.ErrorCodeConflict, "Пользователь с таким email уже существует")
+            return
+        }
+    }
 
-	// Обновление данных
-	user.Email = req.Email
-	user.Name = req.Name
+    user.Email = strings.TrimSpace(strings.ToLower(req.Email))
+    user.Name = req.Name
 
-	if err := h.userRepo.Update(user); err != nil {
-		logger.LogUserAction(r, "profile_update", fmt.Sprintf("user_id=%s", userID), false)
-		h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка обновления профиля")
-		return
-	}
+    if err := h.userRepo.Update(user); err != nil {
+        logger.LogUserAction(r, "profile_update", fmt.Sprintf("user_id=%s", userID), false)
+        h.sendErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalServer, "Ошибка обновления профиля")
+        return
+    }
 
-	// Логируем успешное обновление профиля
-	logger.LogUserAction(r, "profile_update", fmt.Sprintf("user_id=%s, email=%s", userID, req.Email), true)
+    logger.LogUserAction(r, "profile_update", fmt.Sprintf("user_id=%s, email=%s", userID, user.Email), true)
 
-	// Очищаем пароль перед отправкой
-	user.Password = ""
-	h.sendSuccessResponse(w, http.StatusOK, user)
+    user.Password = ""
+    h.sendSuccessResponse(w, http.StatusOK, user)
 }
 
 // ListUsers возвращает список пользователей (только для администраторов)
@@ -300,7 +300,7 @@ func (h *UserHandler) isAdmin(r *http.Request) bool {
 func (h *UserHandler) sendSuccessResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	response := models.NewSuccessResponse(data)
 	json.NewEncoder(w).Encode(response)
 }
@@ -327,7 +327,7 @@ func (h *UserHandler) sendErrorResponse(w http.ResponseWriter, statusCode int, c
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	response := models.NewErrorResponse(code, message)
 	json.NewEncoder(w).Encode(response)
 }
