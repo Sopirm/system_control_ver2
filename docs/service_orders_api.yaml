@@ -209,6 +209,7 @@ components:
           type: boolean
         data:
           type: object
+          nullable: true
         error:
           $ref: '#/components/schemas/APIError'
 

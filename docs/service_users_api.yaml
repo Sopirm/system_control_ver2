@@ -181,6 +181,7 @@ components:
           type: boolean
         data:
           type: object
+          nullable: true
         error:
           $ref: '#/components/schemas/APIError'
 
@@ -203,7 +204,7 @@ components:
           type: string
 
 paths:
-  /v1/register:
+  /v1/users/register:
     post:
       tags:
         - Registration
@@ -239,7 +240,7 @@ paths:
         '500':
           description: Внутренняя ошибка
 
-  /v1/login:
+  /v1/users/login:
     post:
       tags:
         - Authentication
@@ -279,7 +280,7 @@ paths:
         '500':
           description: Внутренняя ошибка
 
-  /v1/profile:
+  /v1/users/profile:
     get:
       tags:
         - Profile

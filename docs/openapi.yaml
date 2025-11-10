@@ -107,7 +107,9 @@ components:
           type: object
           description: Данные ответа (зависят от endpoint)
         error:
-          type: "null"
+          type: object
+          nullable: true
+          description: Ошибка отсутствует (null) для успешного ответа
           
     ErrorResponse:
       type: object
@@ -119,7 +121,9 @@ components:
           type: boolean
           example: false
         data:
-          type: "null"
+          type: object
+          nullable: true
+          description: Данные отсутствуют при ошибке (null)
         error:
           $ref: '#/components/schemas/APIError'
           
@@ -138,6 +142,7 @@ components:
             - FORBIDDEN
             - CONFLICT
             - INTERNAL_SERVER_ERROR
+            - RATE_LIMIT_EXCEEDED
           description: Код ошибки
         message:
           type: string
